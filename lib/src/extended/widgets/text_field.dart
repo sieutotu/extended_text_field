@@ -99,7 +99,11 @@ class ExtendedTextField extends _TextField {
     this.extendedSpellCheckConfiguration,
     this.specialTextSpanBuilder,
     super.magnifierConfiguration,
+    this.onPasteFunction,
+
   });
+
+  final Function()? onPasteFunction;
 
   /// build your ccustom text span
   final SpecialTextSpanBuilder? specialTextSpanBuilder;
@@ -529,6 +533,7 @@ class ExtendedTextFieldState extends _TextFieldState {
               TextMagnifier.adaptiveMagnifierConfiguration,
           // zmtzawqlp
           specialTextSpanBuilder: extenedTextField.specialTextSpanBuilder,
+          onPasteFunction: extenedTextField.onPasteFunction,
         ),
       ),
     );

@@ -93,6 +93,7 @@ class ExtendedEditableText extends _EditableText {
     super.magnifierConfiguration = TextMagnifierConfiguration.disabled,
     super.undoController,
     this.specialTextSpanBuilder,
+    this.onPasteFunction,
   });
 
   /// build your ccustom text span
@@ -148,6 +149,8 @@ class ExtendedEditableText extends _EditableText {
   /// If this configuration is left null, then spell check is disabled by default.
   /// {@endtemplate}
   final ExtendedSpellCheckConfiguration? extendedSpellCheckConfiguration;
+
+  final Function()? onPasteFunction;
   @override
   _EditableTextState createState() {
     return ExtendedEditableTextState();
@@ -438,7 +441,6 @@ class ExtendedEditableTextState extends _EditableTextState {
           extendedEditableText.extendedContextMenuBuilder == null
               ? null
               : (BuildContext context) {
-                  print("ASDASD");
                   return extendedEditableText.extendedContextMenuBuilder!(
                     context,
                     this,
@@ -638,6 +640,88 @@ class ExtendedEditableTextState extends _EditableTextState {
     }
 
     return value;
+  }
+
+  @override
+  bool get pasteEnabled {
+    return extendedEditableText.extendedContextMenuBuilder != null &&
+        !widget.readOnly;
+  }
+
+  @override
+  List<ContextMenuButtonItem> get contextMenuButtonItems {
+    return buttonItemsForToolbarOptions() ??
+        EditableText.getEditableButtonItems(
+          clipboardStatus: clipboardStatus.value,
+          onCopy: copyEnabled
+              ? () => copySelection(SelectionChangedCause.toolbar)
+              : null,
+          onCut: cutEnabled
+              ? () => cutSelection(SelectionChangedCause.toolbar)
+              : null,
+          onPaste: pasteEnabled
+              ? () => pasteText(SelectionChangedCause.toolbar)
+              : null,
+          onSelectAll: selectAllEnabled
+              ? () => selectAll(SelectionChangedCause.toolbar)
+              : null,
+          onLookUp: lookUpEnabled
+              ? () => lookUpSelection(SelectionChangedCause.toolbar)
+              : null,
+          onSearchWeb: searchWebEnabled
+              ? () => searchWebForSelection(SelectionChangedCause.toolbar)
+              : null,
+          onShare: shareEnabled
+              ? () => shareSelection(SelectionChangedCause.toolbar)
+              : null,
+          onLiveTextInput: liveTextInputEnabled
+              ? () => _startLiveTextInput(SelectionChangedCause.toolbar)
+              : null,
+        );
+  }
+
+  @override
+  Future<void> pasteText(SelectionChangedCause cause) async {
+    if (widget.readOnly) {
+      return;
+    }
+    final TextSelection selection = textEditingValue.selection;
+    if (!selection.isValid) {
+      return;
+    }
+    // Snapshot the input before using `await`.
+    // See https://github.com/flutter/flutter/issues/11427
+    if (extendedEditableText.onPasteFunction != null) {
+      extendedEditableText.onPasteFunction!();
+    }
+
+    final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data == null) {
+      return;
+    }
+
+    // After the paste, the cursor should be collapsed and located after the
+    // pasted content.
+    final int lastSelectionIndex =
+    math.max(selection.baseOffset, selection.extentOffset);
+    final TextEditingValue collapsedTextEditingValue =
+    textEditingValue.copyWith(
+      selection: TextSelection.collapsed(offset: lastSelectionIndex),
+    );
+
+    userUpdateTextEditingValue(
+      collapsedTextEditingValue.replaced(selection, data.text!),
+      cause,
+    );
+    if (cause == SelectionChangedCause.toolbar) {
+      // Schedule a call to bringIntoView() after renderEditable updates.
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          bringIntoView(textEditingValue.selection.extent);
+        }
+      });
+      hideToolbar();
+    }
   }
 
   @override
