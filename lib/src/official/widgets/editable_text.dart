@@ -1938,13 +1938,9 @@ class _EditableTextState extends State<_EditableText>
   }
 
   @override
-  bool get pasteEnabled {
-    if (widget.selectionControls is! TextSelectionHandleControls) {
-      return widget.toolbarOptions.paste && !widget.readOnly;
-    }
-    return !widget.readOnly &&
-        (clipboardStatus.value == ClipboardStatus.pasteable);
-  }
+  bool get pasteEnabled =>
+      widget.contextMenuBuilder != null &&
+          !widget.readOnly;
 
   @override
   bool get selectAllEnabled {

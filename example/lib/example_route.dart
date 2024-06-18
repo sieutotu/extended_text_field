@@ -12,7 +12,6 @@ import 'package:flutter/widgets.dart';
 import 'pages/complex/text_demo.dart';
 import 'pages/main_page.dart';
 import 'pages/simple/custom_toolbar.dart';
-import 'pages/simple/no_keyboard.dart';
 import 'pages/simple/selectable_text.dart';
 import 'pages/simple/widget_span.dart';
 
@@ -35,23 +34,6 @@ FFRouteSettings getRouteSettings({
         exts: <String, dynamic>{
           'group': 'Simple',
           'order': 0,
-        },
-      );
-    case 'fluttercandies://NoKeyboard':
-      return FFRouteSettings(
-        name: name,
-        arguments: arguments,
-        builder: () => NoSystemKeyboardDemo(
-          key: asT<Key?>(
-            safeArguments['key'],
-          ),
-        ),
-        routeName: 'no system Keyboard',
-        description:
-            'show how to ignore system keyboard and show custom keyboard',
-        exts: <String, dynamic>{
-          'group': 'Simple',
-          'order': 2,
         },
       );
     case 'fluttercandies://SelectableTextDemo':
