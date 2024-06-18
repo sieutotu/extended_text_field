@@ -693,6 +693,16 @@ class ExtendedEditableTextState extends _EditableTextState {
     // See https://github.com/flutter/flutter/issues/11427
     if (extendedEditableText.onPasteFunction != null) {
       extendedEditableText.onPasteFunction!();
+      if (cause == SelectionChangedCause.toolbar) {
+        // Schedule a call to bringIntoView() after renderEditable updates.
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            bringIntoView(textEditingValue.selection.extent);
+          }
+        });
+        hideToolbar();
+      }
+      return;
     }
 
     final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
