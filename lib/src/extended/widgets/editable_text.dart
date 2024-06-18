@@ -434,11 +434,11 @@ class ExtendedEditableTextState extends _EditableTextState {
       selectionDelegate: this,
       dragStartBehavior: widget.dragStartBehavior,
       onSelectionHandleTapped: widget.onSelectionHandleTapped,
-      // zmtzawqlp
       contextMenuBuilder:
           extendedEditableText.extendedContextMenuBuilder == null
               ? null
               : (BuildContext context) {
+                  print("ASDASD");
                   return extendedEditableText.extendedContextMenuBuilder!(
                     context,
                     this,
