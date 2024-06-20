@@ -691,38 +691,29 @@ class ExtendedEditableTextState extends _EditableTextState {
     }
     // Snapshot the input before using `await`.
     // See https://github.com/flutter/flutter/issues/11427
+    final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
     if (extendedEditableText.onPasteFunction != null) {
       extendedEditableText.onPasteFunction!();
-      if (cause == SelectionChangedCause.toolbar) {
-        // Schedule a call to bringIntoView() after renderEditable updates.
-        SchedulerBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            bringIntoView(textEditingValue.selection.extent);
-          }
-        });
-        hideToolbar();
-      }
-      return;
     }
 
-    final ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
-    if (data == null) {
-      return;
+
+    if (data != null) {
+      final int lastSelectionIndex =
+      math.max(selection.baseOffset, selection.extentOffset);
+      final TextEditingValue collapsedTextEditingValue =
+      textEditingValue.copyWith(
+        selection: TextSelection.collapsed(offset: lastSelectionIndex),
+      );
+
+      userUpdateTextEditingValue(
+        collapsedTextEditingValue.replaced(selection, data.text!),
+        cause,
+      );
     }
 
     // After the paste, the cursor should be collapsed and located after the
     // pasted content.
-    final int lastSelectionIndex =
-    math.max(selection.baseOffset, selection.extentOffset);
-    final TextEditingValue collapsedTextEditingValue =
-    textEditingValue.copyWith(
-      selection: TextSelection.collapsed(offset: lastSelectionIndex),
-    );
 
-    userUpdateTextEditingValue(
-      collapsedTextEditingValue.replaced(selection, data.text!),
-      cause,
-    );
     if (cause == SelectionChangedCause.toolbar) {
       // Schedule a call to bringIntoView() after renderEditable updates.
       SchedulerBinding.instance.addPostFrameCallback((_) {
