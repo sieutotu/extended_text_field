@@ -54,6 +54,7 @@ class ExtendedEditableText extends _EditableText {
     super.onAppPrivateCommand,
     super.onSelectionChanged,
     super.onSelectionHandleTapped,
+    super.groupId = EditableText,
     super.onTapOutside,
     super.inputFormatters,
     super.mouseCursor,
@@ -222,18 +223,31 @@ class ExtendedEditableTextState extends _EditableTextState {
         spellCheckService: spellCheckService ?? DefaultSpellCheckService());
   }
 
+  // zmtzawqlp
   @override
   Widget build(BuildContext context) {
     assert(debugCheckHasMediaQuery(context));
     super.build(context); // See AutomaticKeepAliveClientMixin.
 
     final TextSelectionControls? controls = widget.selectionControls;
+    double? textScaleFactor;
+    final TextScaler effectiveTextScaler = switch ((
+      widget.textScaler, textScaleFactor //widget.textScaleFactor
+    )) {
+      (final TextScaler textScaler, _) => textScaler,
+      (null, final double textScaleFactor) =>
+        TextScaler.linear(textScaleFactor),
+      (null, null) => MediaQuery.textScalerOf(context),
+    };
+
     return _CompositionCallback(
       compositeCallback: _compositeCallback,
       enabled: _hasInputConnection,
       child: TextFieldTapRegion(
-        onTapOutside: widget.onTapOutside ?? _defaultOnTapOutside,
-        debugLabel: kReleaseMode ? null : 'EditableText',
+        groupId: widget.groupId,
+        onTapOutside:
+            _hasFocus ? widget.onTapOutside ?? _defaultOnTapOutside : null,
+        debugLabel: kReleaseMode ? null : 'ExtendedEditableText',
         child: MouseRegion(
           cursor: widget.mouseCursor ?? SystemMouseCursors.text,
           child: Actions(
@@ -274,101 +288,123 @@ class ExtendedEditableTextState extends _EditableTextState {
                 return oldValue.text != newValue.text ||
                     oldValue.composing != newValue.composing;
               },
+              undoStackModifier: (TextEditingValue value) {
+                // On Android we should discard the composing region when pushing
+                // a new entry to the undo stack. This prevents the TextInputPlugin
+                // from restarting the input on every undo/redo when the composing
+                // region is changed by the framework.
+                return defaultTargetPlatform == TargetPlatform.android
+                    ? value.copyWith(composing: TextRange.empty)
+                    : value;
+              },
               focusNode: widget.focusNode,
               controller: widget.undoController,
               child: Focus(
                 focusNode: widget.focusNode,
                 includeSemantics: false,
                 debugLabel: kReleaseMode ? null : 'EditableText',
-                child: Scrollable(
-                  key: _scrollableKey,
-                  excludeFromSemantics: true,
-                  axisDirection:
-                      _isMultiline ? AxisDirection.down : AxisDirection.right,
-                  controller: _scrollController,
-                  physics: widget.scrollPhysics,
-                  dragStartBehavior: widget.dragStartBehavior,
-                  restorationId: widget.restorationId,
-                  // If a ScrollBehavior is not provided, only apply scrollbars when
-                  // multiline. The overscroll indicator should not be applied in
-                  // either case, glowing or stretching.
-                  scrollBehavior: widget.scrollBehavior ??
-                      ScrollConfiguration.of(context).copyWith(
-                        scrollbars: _isMultiline,
-                        overscroll: false,
-                      ),
-                  viewportBuilder:
-                      (BuildContext context, ViewportOffset offset) {
-                    return CompositedTransformTarget(
-                      link: _toolbarLayerLink,
-                      child: Semantics(
-                        onCopy: _semanticsOnCopy(controls),
-                        onCut: _semanticsOnCut(controls),
-                        onPaste: _semanticsOnPaste(controls),
-                        child: _ScribbleFocusable(
-                          focusNode: widget.focusNode,
-                          editableKey: _editableKey,
-                          enabled: widget.scribbleEnabled,
-                          updateSelectionRects: () {
-                            _openInputConnection();
-                            _updateSelectionRects(force: true);
-                          },
-                          child: _ExtendedEditable(
-                            key: _editableKey,
-                            startHandleLayerLink: _startHandleLayerLink,
-                            endHandleLayerLink: _endHandleLayerLink,
-                            inlineSpan: buildTextSpan(),
-                            value: _value,
-                            cursorColor: _cursorColor,
-                            backgroundCursorColor: widget.backgroundCursorColor,
-                            showCursor: _cursorVisibilityNotifier,
-                            forceLine: widget.forceLine,
-                            readOnly: widget.readOnly,
-                            hasFocus: _hasFocus,
-                            maxLines: widget.maxLines,
-                            minLines: widget.minLines,
-                            expands: widget.expands,
-                            strutStyle: widget.strutStyle,
-                            selectionColor:
-                                _selectionOverlay?.spellCheckToolbarIsVisible ??
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (ScrollNotification notification) {
+                    _handleContextMenuOnScroll(notification);
+                    _scribbleCacheKey = null;
+                    return false;
+                  },
+                  child: Scrollable(
+                    key: _scrollableKey,
+                    excludeFromSemantics: true,
+                    axisDirection:
+                        _isMultiline ? AxisDirection.down : AxisDirection.right,
+                    controller: _scrollController,
+                    physics: widget.scrollPhysics,
+                    dragStartBehavior: widget.dragStartBehavior,
+                    restorationId: widget.restorationId,
+                    // If a ScrollBehavior is not provided, only apply scrollbars when
+                    // multiline. The overscroll indicator should not be applied in
+                    // either case, glowing or stretching.
+                    scrollBehavior: widget.scrollBehavior ??
+                        ScrollConfiguration.of(context).copyWith(
+                          scrollbars: _isMultiline,
+                          overscroll: false,
+                        ),
+                    viewportBuilder:
+                        (BuildContext context, ViewportOffset offset) {
+                      return CompositedTransformTarget(
+                        link: _toolbarLayerLink,
+                        child: Semantics(
+                          onCopy: _semanticsOnCopy(controls),
+                          onCut: _semanticsOnCut(controls),
+                          onPaste: _semanticsOnPaste(controls),
+                          child: _ScribbleFocusable(
+                            focusNode: widget.focusNode,
+                            editableKey: _editableKey,
+                            enabled: widget.scribbleEnabled,
+                            updateSelectionRects: () {
+                              _openInputConnection();
+                              _updateSelectionRects(force: true);
+                            },
+                            child: SizeChangedLayoutNotifier(
+                              child: _ExtendedEditable(
+                                key: _editableKey,
+                                startHandleLayerLink: _startHandleLayerLink,
+                                endHandleLayerLink: _endHandleLayerLink,
+                                inlineSpan: buildTextSpan(),
+                                value: _value,
+                                cursorColor: _cursorColor,
+                                backgroundCursorColor:
+                                    widget.backgroundCursorColor,
+                                showCursor: _cursorVisibilityNotifier,
+                                forceLine: widget.forceLine,
+                                readOnly: widget.readOnly,
+                                hasFocus: _hasFocus,
+                                maxLines: widget.maxLines,
+                                minLines: widget.minLines,
+                                expands: widget.expands,
+                                strutStyle: widget.strutStyle,
+                                selectionColor: _selectionOverlay
+                                            ?.spellCheckToolbarIsVisible ??
                                         false
                                     ? _spellCheckConfiguration
                                             .misspelledSelectionColor ??
                                         widget.selectionColor
                                     : widget.selectionColor,
-                            textScaler: widget.textScaler ??
-                                MediaQuery.textScalerOf(context),
-                            textAlign: widget.textAlign,
-                            textDirection: _textDirection,
-                            locale: widget.locale,
-                            textHeightBehavior: widget.textHeightBehavior ??
-                                DefaultTextHeightBehavior.maybeOf(context),
-                            textWidthBasis: widget.textWidthBasis,
-                            obscuringCharacter: widget.obscuringCharacter,
-                            obscureText: widget.obscureText,
-                            offset: offset,
-                            rendererIgnoresPointer:
-                                widget.rendererIgnoresPointer,
-                            cursorWidth: widget.cursorWidth,
-                            cursorHeight: widget.cursorHeight,
-                            cursorRadius: widget.cursorRadius,
-                            cursorOffset: widget.cursorOffset ?? Offset.zero,
-                            selectionHeightStyle: widget.selectionHeightStyle,
-                            selectionWidthStyle: widget.selectionWidthStyle,
-                            paintCursorAboveText: widget.paintCursorAboveText,
-                            enableInteractiveSelection:
-                                widget._userSelectionEnabled,
-                            textSelectionDelegate: this,
-                            devicePixelRatio: _devicePixelRatio,
-                            promptRectRange: _currentPromptRectRange,
-                            promptRectColor: widget.autocorrectionTextRectColor,
-                            clipBehavior: widget.clipBehavior,
-                            supportSpecialText: supportSpecialText,
+                                textScaler: effectiveTextScaler,
+                                textAlign: widget.textAlign,
+                                textDirection: _textDirection,
+                                locale: widget.locale,
+                                textHeightBehavior: widget.textHeightBehavior ??
+                                    DefaultTextHeightBehavior.maybeOf(context),
+                                textWidthBasis: widget.textWidthBasis,
+                                obscuringCharacter: widget.obscuringCharacter,
+                                obscureText: widget.obscureText,
+                                offset: offset,
+                                rendererIgnoresPointer:
+                                    widget.rendererIgnoresPointer,
+                                cursorWidth: widget.cursorWidth,
+                                cursorHeight: widget.cursorHeight,
+                                cursorRadius: widget.cursorRadius,
+                                cursorOffset:
+                                    widget.cursorOffset ?? Offset.zero,
+                                selectionHeightStyle:
+                                    widget.selectionHeightStyle,
+                                selectionWidthStyle: widget.selectionWidthStyle,
+                                paintCursorAboveText:
+                                    widget.paintCursorAboveText,
+                                enableInteractiveSelection:
+                                    widget._userSelectionEnabled,
+                                textSelectionDelegate: this,
+                                devicePixelRatio: _devicePixelRatio,
+                                promptRectRange: _currentPromptRectRange,
+                                promptRectColor:
+                                    widget.autocorrectionTextRectColor,
+                                clipBehavior: widget.clipBehavior,
+                                supportSpecialText: supportSpecialText,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
@@ -386,9 +422,9 @@ class ExtendedEditableTextState extends _EditableTextState {
     // platforms. Additionally, the Cupertino style toolbar can't be drawn on
     // the web with the HTML renderer due to
     // https://github.com/flutter/flutter/issues/123560.
-    final bool platformNotSupported = kIsWeb && BrowserContextMenu.enabled;
+
     if (!spellCheckEnabled ||
-        platformNotSupported ||
+        _webContextMenuEnabled ||
         widget.readOnly ||
         _selectionOverlay == null ||
         !_spellCheckResultsReceived ||
@@ -438,7 +474,8 @@ class ExtendedEditableTextState extends _EditableTextState {
       dragStartBehavior: widget.dragStartBehavior,
       onSelectionHandleTapped: widget.onSelectionHandleTapped,
       contextMenuBuilder:
-          extendedEditableText.extendedContextMenuBuilder == null
+          extendedEditableText.extendedContextMenuBuilder == null ||
+                  _webContextMenuEnabled
               ? null
               : (BuildContext context) {
                   return extendedEditableText.extendedContextMenuBuilder!(
@@ -823,7 +860,7 @@ class ExtendedEditableTextState extends _EditableTextState {
       if (!widget.focusNode.hasFocus) {
         _flagInternalFocus();
         widget.focusNode.requestFocus();
-        _selectionOverlay = _createSelectionOverlay();
+        _selectionOverlay ??= _createSelectionOverlay();
       }
       return;
     }
@@ -849,29 +886,41 @@ class ExtendedEditableTextState extends _EditableTextState {
         // we cache the position.
         _pointOffsetOrigin = point.offset;
 
-        // zmtzawqlp
-        final TextPosition currentTextPosition = supportSpecialText
-            ? ExtendedTextLibraryUtils
-                .convertTextInputPostionToTextPainterPostion(
-                renderEditable.text!,
-                renderEditable.selection!.base,
-              )
-            : TextPosition(
-                offset: renderEditable.selection!.baseOffset,
-                affinity: renderEditable.selection!.affinity);
+        final Offset startCaretCenter;
+        final TextPosition currentTextPosition;
+        final bool shouldResetOrigin;
+        // Only non-null when starting a floating cursor via long press.
+        if (point.startLocation != null) {
+          shouldResetOrigin = false;
+          (startCaretCenter, currentTextPosition) = point.startLocation!;
+        } else {
+          shouldResetOrigin = true;
+          // zmtzawqlp
+          currentTextPosition = supportSpecialText
+              ? ExtendedTextLibraryUtils
+                  .convertTextInputPostionToTextPainterPostion(
+                  renderEditable.text!,
+                  renderEditable.selection!.base,
+                )
+              : TextPosition(
+                  offset: renderEditable.selection!.baseOffset,
+                  affinity: renderEditable.selection!.affinity);
+          startCaretCenter =
+              renderEditable.getLocalRectForCaret(currentTextPosition).center;
+        }
 
-        _startCaretRect =
-            renderEditable.getLocalRectForCaret(currentTextPosition);
-
-        _lastBoundedOffset = _startCaretRect!.center - _floatingCursorOffset;
+        _startCaretCenter = startCaretCenter;
+        _lastBoundedOffset =
+            renderEditable.calculateBoundedFloatingCursorOffset(
+                _startCaretCenter! - _floatingCursorOffset,
+                shouldResetOrigin: shouldResetOrigin);
         _lastTextPosition = currentTextPosition;
         renderEditable.setFloatingCursor(
             point.state, _lastBoundedOffset!, _lastTextPosition!);
-        break;
       case FloatingCursorDragState.Update:
         final Offset centeredPoint = point.offset! - _pointOffsetOrigin!;
         final Offset rawCursorOffset =
-            _startCaretRect!.center + centeredPoint - _floatingCursorOffset;
+            _startCaretCenter! + centeredPoint - _floatingCursorOffset;
 
         _lastBoundedOffset = renderEditable
             .calculateBoundedFloatingCursorOffset(rawCursorOffset);
@@ -886,7 +935,6 @@ class ExtendedEditableTextState extends _EditableTextState {
 
         renderEditable.setFloatingCursor(
             point.state, _lastBoundedOffset!, _lastTextPosition!);
-        break;
       case FloatingCursorDragState.End:
         // Resume cursor blinking.
         _startCursorBlink();
@@ -898,7 +946,6 @@ class ExtendedEditableTextState extends _EditableTextState {
               duration: _EditableTextState._floatingCursorResetTime,
               curve: Curves.decelerate);
         }
-        break;
     }
   }
 
@@ -1003,7 +1050,7 @@ class ExtendedEditableTextState extends _EditableTextState {
       return;
     }
     final TextPosition currentTextPosition =
-        TextPosition(offset: selection.baseOffset);
+        TextPosition(offset: selection.start);
     final Rect caretRect =
         renderEditable.getLocalRectForCaret(currentTextPosition);
     _textInputConnection!.setCaretRect(caretRect);

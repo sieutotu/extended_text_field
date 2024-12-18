@@ -88,7 +88,7 @@ class ExtendedRenderEditable extends _RenderEditable {
     _computeTextMetricsIfNeeded();
     assert(_lastTapDownPosition != null);
     final TextPosition position = _textPainter.getPositionForOffset(
-        globalToLocal(_lastTapDownPosition! - _paintOffset));
+        globalToLocal(_lastTapDownPosition!) - _paintOffset);
     final TextRange word = _textPainter.getWordBoundary(position);
     late TextSelection newSelection;
     if (position.offset <= word.start) {
@@ -117,12 +117,12 @@ class ExtendedRenderEditable extends _RenderEditable {
       {required Offset from,
       Offset? to,
       required SelectionChangedCause cause}) {
-    _layoutText(minWidth: constraints.minWidth, maxWidth: constraints.maxWidth);
+    _computeTextMetricsIfNeeded();
     TextPosition fromPosition =
-        _textPainter.getPositionForOffset(globalToLocal(from - _paintOffset));
+        _textPainter.getPositionForOffset(globalToLocal(from) - _paintOffset);
     TextPosition? toPosition = to == null
         ? null
-        : _textPainter.getPositionForOffset(globalToLocal(to - _paintOffset));
+        : _textPainter.getPositionForOffset(globalToLocal(to) - _paintOffset);
     // zmtzawqlp
     if (hasSpecialInlineSpanBase) {
       fromPosition =

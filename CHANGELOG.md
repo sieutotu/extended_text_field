@@ -1,5 +1,18 @@
-## 13.1.0
+## 16.0.1
 
+* Fix issue that context menu click didn't work on desktop(#250) 
+
+## 16.0.0
+
+* Migrate to Flutter 3.24.0
+
+## 15.0.0
+
+* Migrate to Flutter 3.22.0
+
+## 14.0.0
+
+* Migrate to Flutter 3.19.0
 * Fix wrong postion of Magnifier
 
 ## 13.0.1
